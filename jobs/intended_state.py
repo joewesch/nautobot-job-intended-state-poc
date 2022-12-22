@@ -38,6 +38,16 @@ def replace_ref(ref):
     return object_class.objects.get(**obj_lookup)
 
 
+def obj_set(obj, _set):
+    set_ref, set_list = _set.items()
+    ref_split = set_ref.split(":")
+    field_name = ref_split[1]
+    if not isinstance(set_list, (list, set, tuple)):
+        set_list = [set_list]
+    field = getattr(obj, field_name)
+    field.set(set_list, clear=True)
+
+
 class IntendedState(Job):
 
     json_payload = TextVar()
@@ -52,14 +62,19 @@ class IntendedState(Job):
         for object_name, objects in intended_state.items():
             object_class = apps.get_model(object_name)
             for object_data in objects:
+                _set = None
                 for key, value in object_data.items():
                     try:
                         object_data[key] = replace_ref(value)
+                        if isinstance(key, (str, bytes)) and key.startswith("#set"):
+                            _set = object_data.pop(key)
                     except (AttributeError, ObjectDoesNotExist, ValidationError) as e:
                         self.log_warning(message=f"Error on key {key}. Error: {e}.")
                         continue
                 try:
                     obj, created = object_class.objects.update_or_create(**object_data)
+                    if _set:
+                        obj_set(obj, _set)
                 except (FieldError, ObjectDoesNotExist) as e:
                     self.log_warning(message=f"Unable to create object. Error: {e}.")
                     continue
