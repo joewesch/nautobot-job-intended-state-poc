@@ -97,15 +97,19 @@ json_payload = {
     "dcim.device": [
         {
             "name": "Device 1",
-            "device_role": "#ref:dcim.devicerole:name:Role 1",
-            "device_type": "#ref:dcim.devicetype:model:Model 1",
-            "site": "#ref:dcim.site:name:Site 1",
+            "defaults": {
+                "device_role": "#ref:dcim.devicerole:name:Role 1",
+                "device_type": "#ref:dcim.devicetype:model:Model 1",
+                "site": "#ref:dcim.site:name:Site 1",
+            }
         },
         {
             "name": "Device 2",
-            "device_role": "#ref:dcim.devicerole:name:Role 2",
-            "device_type": "#ref:dcim.devicetype:model:Model 2",
-            "site": "#ref:dcim.site:name:Site 2",
+            "defaults": {
+                "device_role": "#ref:dcim.devicerole:name:Role 2",
+                "device_type": "#ref:dcim.devicetype:model:Model 2",
+                "site": "#ref:dcim.site:name:Site 2",
+            }
         },
     ],
 }
