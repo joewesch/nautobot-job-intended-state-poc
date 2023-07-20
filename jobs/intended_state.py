@@ -48,6 +48,15 @@ def obj_set(obj, set_dict):
     obj.validated_save()
 
 
+def obj_add(obj, add_dict):
+    for field_name, add_list in add_dict.items():
+        if not isinstance(add_list, (list, set, tuple)):
+            add_list = [add_list]
+        field = getattr(obj, field_name)
+        field.add(*add_list)
+    obj.validated_save()
+
+
 class IntendedState(Job):
 
     json_payload = TextVar()
@@ -68,6 +77,12 @@ class IntendedState(Job):
                     set_dict = replace_ref(object_data["defaults"].pop("#set"))
                 else:
                     set_dict = None
+                if "#add" in object_data:
+                    add_dict = replace_ref(object_data.pop("#add"))
+                elif "#add" in object_data.get("defaults", {}):
+                    add_dict = replace_ref(object_data["defaults"].pop("#add"))
+                else:
+                    add_dict = None
                 try:
                     for key, value in object_data.items():
                         object_data[key] = replace_ref(value)
@@ -84,6 +99,8 @@ class IntendedState(Job):
                     obj, created = object_class.objects.update_or_create(**object_data)
                     if set_dict:
                         obj_set(obj, set_dict)
+                    if add_dict:
+                        obj_add(obj, add_dict)
                 except (
                     ValueError,
                     FieldError,

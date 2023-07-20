@@ -59,9 +59,11 @@ Elements of the reference string:
 - `field_2` (optional): additional identifying field
 - `value_2` (optional): value for `field_2`
 
-### Setting ManyToMany Relationships
+### Modifying ManyToMany Relationships
 
-Some item fields (M2M) cannot be directly assigned. An example of this would be Content Types or Tags. In this case, you would need to nest these items under a `#set` key in the item dictionary. They will be assigned to the object after it has been created or updated.
+Some item fields (M2M) cannot be directly assigned. An example of this would be Content Types or Tags. In this case, you can use the `#set` or `#add` keys to manage these relationships.
+
+In order to replace the list of items, you need to nest these items under a `#set` key in the item dictionary. They will be assigned to the object after it has been created or updated.
 
 Example:
 ```json
@@ -71,6 +73,24 @@ Example:
             "name": "Active",
             "slug": "active",
             "#set": {
+                "content_types": [
+                        "#ref:contenttypes.contenttype:app_label:dcim:model:site",
+                        "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                    ]
+            }
+        }
+    ]
+}
+```
+
+If you, however, you don't want to provide the entire list of items every time but rather want to ensure something is in the list you can use the `#add` key in the same way:
+```json
+{
+    "extras.status": [
+        {
+            "name": "Active",
+            "slug": "active",
+            "#add": {
                 "content_types": [
                         "#ref:contenttypes.contenttype:app_label:dcim:model:site",
                         "#ref:contenttypes.contenttype:app_label:dcim:model:device",
