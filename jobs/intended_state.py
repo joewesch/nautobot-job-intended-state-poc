@@ -1,12 +1,18 @@
 import json
 
 from django.apps import apps
-from django.core.exceptions import FieldError, ObjectDoesNotExist, ValidationError, MultipleObjectsReturned
+from django.core.exceptions import (
+    FieldError,
+    ObjectDoesNotExist,
+    ValidationError,
+    MultipleObjectsReturned,
+)
+from django.db import transaction
 from django.db.utils import IntegrityError
+from nautobot.apps.jobs import Job, TextVar
 
-from nautobot.extras.jobs import Job, TextVar
 
-name = "POC Jobs"
+name = "Intended State"
 
 
 def replace_ref(ref):
@@ -58,15 +64,21 @@ def obj_add(obj, add_dict):
 
 
 class IntendedState(Job):
-
     json_payload = TextVar()
 
     class Meta:
-        name = "Intended State Job POC"
+        name = "Intended State Job"
         description = "Create or update objects in Nautobot by passing in an intended state JSON payload."
 
-    def run(self, data, commit):
-        json_payload = data["json_payload"]
+    def run(self, json_payload):
+        try:
+            with transaction.atomic():
+                self._run_intended_state(json_payload)
+        except Exception as error:
+            self.logger.error("Failed to create objects: %s", error)
+            raise error
+
+    def _run_intended_state(self, json_payload):
         intended_state = json.loads(json_payload)
         for object_name, objects in intended_state.items():
             object_class = apps.get_model(object_name)
@@ -93,7 +105,9 @@ class IntendedState(Job):
                     ValidationError,
                     MultipleObjectsReturned,
                 ) as e:
-                    self.log_warning(message=f"Error replacing reference on {key}. Error: {e}.")
+                    self.logger.warning(
+                        "Error replacing reference on %s. Error: %s.", object_name, e
+                    )
                     continue
                 try:
                     obj, created = object_class.objects.update_or_create(**object_data)
@@ -109,9 +123,11 @@ class IntendedState(Job):
                     MultipleObjectsReturned,
                     IntegrityError,
                 ) as e:
-                    self.log_warning(message=f"Unable to create object. Error: {e}.")
+                    self.logger.warning("Unable to create object. Error: %s.", e)
                     continue
-                self.log_success(obj=obj, message=f"Object {obj} has been {'created' if created else 'updated'}.")
-
-
-jobs = [IntendedState]
+                self.logger.info(
+                    "Object %s has been %s.",
+                    obj,
+                    "created" if created else "updated",
+                    extra={"object": obj},
+                )
