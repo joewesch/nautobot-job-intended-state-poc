@@ -18,17 +18,17 @@ Once you have synced the repo, you can run the Job [via the GUI or an API call l
 
 ```json
 {
-    "dcim.site": [
+    "dcim.location": [
         {
-            "name": "New Site",
+            "name": "New Location",
             "status": ...,
-            "region": ...,
+            "parent": ...,
         }
     ],
     "dcim.device": [
         {
             "name": "New Device",
-            "device_role": ...,
+            "role": ...,
             "device_type": ...,
         }
     ]
@@ -49,13 +49,13 @@ This payload must be sent as a string that will be serialized. Here is an exampl
 
 ### References to Other Models
 
-Some item fields are foreign key relationships to other instances. In those cases, you will need to look up the object before trying to use it. For this, I have added a simple colon separated string pattern to replace a value that is a reference with an object instance. You will need to format the reference string as such: `#ref:dcim.site:name:Site 1[:field_2:value_2:...]`
+Some item fields are foreign key relationships to other instances. In those cases, you will need to look up the object before trying to use it. For this, I have added a simple colon separated string pattern to replace a value that is a reference with an object instance. You will need to format the reference string as such: `#ref:dcim.location:name:Location 1[:field_2:value_2:...]`
 
 Elements of the reference string:
 - `#ref`: must start the string; this denotes that this is a reference to a model instance
-- `dcim.site`: the app and model name
-- `name`: the identifying field name to query to get the object (i.e. name, slug, model, etc.)
-- `Site 1`: the value of the field that uniquely identifies an object
+- `dcim.location`: the app and model name
+- `name`: the identifying field name to query to get the object (i.e. name, model, etc.)
+- `Location 1`: the value of the field that uniquely identifies an object
 - `field_2` (optional): additional identifying field
 - `value_2` (optional): value for `field_2`
 
@@ -71,10 +71,9 @@ Example:
     "extras.status": [
         {
             "name": "Active",
-            "slug": "active",
             "#set": {
                 "content_types": [
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:site",
+                        "#ref:contenttypes.contenttype:app_label:dcim:model:location",
                         "#ref:contenttypes.contenttype:app_label:dcim:model:device",
                     ]
             }
@@ -89,10 +88,9 @@ If you, however, you don't want to provide the entire list of items every time b
     "extras.status": [
         {
             "name": "Active",
-            "slug": "active",
             "#add": {
                 "content_types": [
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:site",
+                        "#ref:contenttypes.contenttype:app_label:dcim:model:location",
                         "#ref:contenttypes.contenttype:app_label:dcim:model:device",
                     ]
             }
@@ -112,9 +110,9 @@ In this example, only the `name` field is used to uniquely identify the device:
         {
             "name": "Device 1",
             "defaults": {
-                "device_role": "#ref:dcim.devicerole:name:Role 1",
+                "role": "#ref:extras.role:name:Role 1",
                 "device_type": "#ref:dcim.devicetype:model:Model 1",
-                "site": "#ref:dcim.site:name:Site 1",
+                "location": "#ref:dcim.location:name:Location 1",
             }
         }
     ]
@@ -139,13 +137,12 @@ json_payload = {
     "extras.status": [
         {
             "name": "Active",
-            "slug": "active",
-            "#set": {
+            "#add": {
                 "content_types": [
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:site",
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:device",
-                    ]
-            }
+                    "#ref:contenttypes.contenttype:app_label:dcim:model:location",
+                    "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                ]
+            },
         }
     ],
     "dcim.manufacturer": [
@@ -162,37 +159,69 @@ json_payload = {
             "manufacturer": "#ref:dcim.manufacturer:name:Manufacturer 2",
         },
     ],
-    "dcim.devicerole": [
-        {"name": "Role 1"},
-        {"name": "Role 2"},
+    "extras.role": [
+        {
+            "name": "Role 1",
+            "#set": {
+                "content_types": [
+                    "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                ]
+            },
+        },
+        {
+            "name": "Role 2",
+            "#set": {
+                "content_types": [
+                    "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                ]
+            },
+        },
     ],
-    "dcim.site": [
-        {"name": "Site 1", "status": "#ref:extras.status:slug:active"},
-        {"name": "Site 2", "status": "#ref:extras.status:slug:active"},
+    "dcim.locationtype": [
+        {"name": "Location Type 1"},
+        {"name": "Location Type 2"},
+    ],
+    "dcim.location": [
+        {
+            "name": "Location 1",
+            "location_type": "#ref:dcim.locationtype:name:Location Type 1",
+            "defaults": {
+                "status": "#ref:extras.status:name:Active",
+            },
+        },
+        {
+            "name": "Location 2",
+            "location_type": "#ref:dcim.locationtype:name:Location Type 2",
+            "defaults": {
+                "status": "#ref:extras.status:name:Active",
+            },
+        },
     ],
     "dcim.device": [
         {
             "name": "Device 1",
             "defaults": {
-                "device_role": "#ref:dcim.devicerole:name:Role 1",
+                "role": "#ref:extras.role:name:Role 1",
                 "device_type": "#ref:dcim.devicetype:model:Model 1",
-                "site": "#ref:dcim.site:name:Site 1",
-            }
+                "location": "#ref:dcim.location:name:Location 1",
+                "status": "#ref:extras.status:name:Active",
+            },
         },
         {
             "name": "Device 2",
             "defaults": {
-                "device_role": "#ref:dcim.devicerole:name:Role 2",
+                "role": "#ref:extras.role:name:Role 2",
                 "device_type": "#ref:dcim.devicetype:model:Model 2",
-                "site": "#ref:dcim.site:name:Site 2",
-            }
+                "location": "#ref:dcim.location:name:Location 2",
+                "status": "#ref:extras.status:name:Active",
+            },
         },
     ],
 }
 
 payload = {"data": {"json_payload": json.dumps(json_payload)}}
 
-requests.post(f"{url}/api/extras/jobs/git.poc-jobs/intended_state/IntendedState/run/", headers=headers, json=payload)
+requests.post(f"{url}/api/extras/jobs/Intended State Job/run/", headers=headers, json=payload)
 ```
 
 ## Limitations
