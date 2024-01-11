@@ -9,7 +9,7 @@ from django.core.exceptions import (
 )
 from django.db import transaction
 from django.db.utils import IntegrityError
-from nautobot.apps.jobs import Job, TextVar
+from nautobot.apps.jobs import Job, TextVar, BooleanVar
 
 
 name = "Intended State"
@@ -65,15 +65,22 @@ def obj_add(obj, add_dict):
 
 class IntendedState(Job):
     json_payload = TextVar()
+    atomic = BooleanVar(
+        label="Run job as an atomic transaction (revert all changes on errors)",
+        default=True,
+        required=False,
+    )
 
     class Meta:
         name = "Intended State Job"
         description = "Create or update objects in Nautobot by passing in an intended state JSON payload."
 
-    def run(self, json_payload):
+    def run(self, json_payload, atomic):
+        if not atomic:
+            return self._run_intended_state(json_payload)
         try:
             with transaction.atomic():
-                self._run_intended_state(json_payload)
+                return self._run_intended_state(json_payload)
         except Exception as error:
             self.logger.error("Failed to create objects: %s", error)
             raise error
