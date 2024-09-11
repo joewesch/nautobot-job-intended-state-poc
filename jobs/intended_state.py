@@ -59,7 +59,7 @@ class IntendedState(Job):
     json_payload = TextVar()
     atomic = BooleanVar(
         label="Run job as an atomic transaction (revert all changes on errors)",
-        default=True,
+        default=False,
         required=False,
     )
 
