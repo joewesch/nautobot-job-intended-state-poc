@@ -47,23 +47,41 @@ This payload must be sent as a string that will be serialized. Here is an exampl
 }
 ```
 
+#### Enabling Atomic Transactions
+
+In Nautobot v1.X, all Jobs ran inside an atomic transaction which means if the job fails (for any reason) it automatically rolls back all of the changes since the Job started. In Nautobot v2.X, this is no longer the case, but the feature is helpful in some situations so I have added an option to the Job to enable atomic transactions if it is desired. Simply add `atomic=True` to the `data` that is sent in the request:
+```python
+{
+    "data": {
+        "atomic": True,
+        "json_payload": {
+            ...
+        }
+    }
+}
+```
+
 ### References to Other Models
 
-Some item fields are foreign key relationships to other instances. In those cases, you will need to look up the object before trying to use it. For this, I have added a simple colon separated string pattern to replace a value that is a reference with an object instance. You will need to format the reference string as such: `#ref:dcim.location:name:Location 1[:field_2:value_2:...]`
-
-Elements of the reference string:
-- `#ref`: must start the string; this denotes that this is a reference to a model instance
-- `dcim.location`: the app and model name
-- `name`: the identifying field name to query to get the object (i.e. name, model, etc.)
-- `Location 1`: the value of the field that uniquely identifies an object
-- `field_2` (optional): additional identifying field
-- `value_2` (optional): value for `field_2`
+Some item fields are foreign key relationships to other objects. In those cases, you will need to look up the object before trying to use it. For this, you will use a dictionary with the key being `#ref` and the value being the object type and details. You will need to format the reference dictionary as such:
+```python
+{
+    "#ref": {
+        "dcim.location": {
+            "name": "Location 1",
+            # "parent__name": "Parent Location 1",
+            # etc.
+            # Add as many fields as necessary to uniquely identify the referenced object
+        }
+    }
+}
+```
 
 ### Modifying ManyToMany Relationships
 
-Some item fields (M2M) cannot be directly assigned. An example of this would be Content Types or Tags. In this case, you can use the `#set` or `#add` keys to manage these relationships.
+Some item fields (M2M) cannot be directly assigned. An example of this would be Content Types or Tags. In this case, you can use the `#set` or `#add` keys to manage these relationships in the same manner as `#ref`.
 
-In order to replace the list of items, you need to nest these items under a `#set` key in the item dictionary. They will be assigned to the object after it has been created or updated.
+If you want to **replace** all of the items you would use the `#set` key in the item dictionary. They will be assigned to the object after it has been created or updated.
 
 Example:
 ```json
@@ -73,16 +91,30 @@ Example:
             "name": "Active",
             "#set": {
                 "content_types": [
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:location",
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:device",
-                    ]
-            }
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "location",
+                            }
+                        }
+                    },
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "device",
+                            }
+                        }
+                    },
+                ]
+            },
         }
     ]
 }
 ```
 
-If you, however, you don't want to provide the entire list of items every time but rather want to ensure something is in the list you can use the `#add` key in the same way:
+If you, however, don't want to provide the entire list of items every time but rather want to ensure something is in the list you can use the `#add` key in the same way:
 ```json
 {
     "extras.status": [
@@ -90,18 +122,32 @@ If you, however, you don't want to provide the entire list of items every time b
             "name": "Active",
             "#add": {
                 "content_types": [
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:location",
-                        "#ref:contenttypes.contenttype:app_label:dcim:model:device",
-                    ]
-            }
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "location",
+                            }
+                        }
+                    },
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "device",
+                            }
+                        }
+                    },
+                ]
+            },
         }
     ]
 }
 ```
 
-### Using Defaults to Update
+### Using Defaults to Update Items
 
-When using the `update_or_create` method, it will first attempt to use the fields passed in as a `.get()` call looking to see if the item exists with all of the provided fields and if not it will create it. If you are running the Job a second time to update a field on an item (i.e. `description`) then it will fail to find an object with that description and try and create a second instance. This will either fail with an IntegrityError due to duplicate unique fields or it will succeed and it will create a duplicate item which is undesired. To combat this, you should nest all fields that are not used to uniquely identify an object in a `defaults` key.
+The underlying method that gets called in this job is the [Django `update_or_create` method](https://docs.djangoproject.com/en/4.2/ref/models/querysets/#update-or-create). When using the `update_or_create` method, it will first attempt to use the fields passed in as a `.get()` call looking to see if the item exists with all of the provided fields and if not it will create it. If you are running the Job a second time to update a field on an item (i.e. `description`) then it will fail to find an object with that description and try and create a second instance. This will either fail with an IntegrityError due to duplicate unique fields or it will succeed and it will create a duplicate item which is undesired. To combat this, you should nest all fields that are not used to uniquely identify an object in a `defaults` key.
 
 In this example, only the `name` field is used to uniquely identify the device:
 ```json
@@ -110,10 +156,25 @@ In this example, only the `name` field is used to uniquely identify the device:
         {
             "name": "Device 1",
             "defaults": {
-                "role": "#ref:extras.role:name:Role 1",
-                "device_type": "#ref:dcim.devicetype:model:Model 1",
-                "location": "#ref:dcim.location:name:Location 1",
-            }
+                "role": {"#ref": {"extras.role": {"name": "Role 1"}}},
+                "device_type": {"#ref": {"dcim.devicetype": {"model": "Model 1"}}},
+                "location": {"#ref": {"dcim.location": {"name": "Location 1"}}},
+                "status": {"#ref": {"extras.status": {"name": "Active"}}},
+            },
+        }
+    ]
+}
+```
+
+In addition, if you don't want to send in the entire payload on subsequent calls (after the item has been created), you can simply include the fields you want to update. For example, this payload simply changes the status of Device 1 to Decommissioned and leaves the role, device type and location the same:
+```json
+{
+    "dcim.device": [
+        {
+            "name": "Device 1",
+            "defaults": {
+                "status": {"#ref": {"extras.status": {"name": "Decommissioned"}}},
+            },
         }
     ]
 }
@@ -139,8 +200,22 @@ json_payload = {
             "name": "Active",
             "#add": {
                 "content_types": [
-                    "#ref:contenttypes.contenttype:app_label:dcim:model:location",
-                    "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "location",
+                            }
+                        }
+                    },
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "device",
+                            }
+                        }
+                    },
                 ]
             },
         }
@@ -152,11 +227,11 @@ json_payload = {
     "dcim.devicetype": [
         {
             "model": "Model 1",
-            "manufacturer": "#ref:dcim.manufacturer:name:Manufacturer 1",
+            "manufacturer": {"#ref": {"dcim.manufacturer": {"name": "Manufacturer 1"}}},
         },
         {
             "model": "Model 2",
-            "manufacturer": "#ref:dcim.manufacturer:name:Manufacturer 2",
+            "manufacturer": {"#ref": {"dcim.manufacturer": {"name": "Manufacturer 2"}}},
         },
     ],
     "extras.role": [
@@ -164,7 +239,14 @@ json_payload = {
             "name": "Role 1",
             "#set": {
                 "content_types": [
-                    "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "device",
+                            }
+                        }
+                    },
                 ]
             },
         },
@@ -172,7 +254,14 @@ json_payload = {
             "name": "Role 2",
             "#set": {
                 "content_types": [
-                    "#ref:contenttypes.contenttype:app_label:dcim:model:device",
+                    {
+                        "#ref": {
+                            "contenttypes.contenttype": {
+                                "app_label": "dcim",
+                                "model": "device",
+                            }
+                        }
+                    },
                 ]
             },
         },
@@ -184,16 +273,20 @@ json_payload = {
     "dcim.location": [
         {
             "name": "Location 1",
-            "location_type": "#ref:dcim.locationtype:name:Location Type 1",
+            "location_type": {
+                "#ref": {"dcim.locationtype": {"name": "Location Type 1"}}
+            },
             "defaults": {
-                "status": "#ref:extras.status:name:Active",
+                "status": {"#ref": {"extras.status": {"name": "Active"}}},
             },
         },
         {
             "name": "Location 2",
-            "location_type": "#ref:dcim.locationtype:name:Location Type 2",
+            "location_type": {
+                "#ref": {"dcim.locationtype": {"name": "Location Type 2"}}
+            },
             "defaults": {
-                "status": "#ref:extras.status:name:Active",
+                "status": {"#ref": {"extras.status": {"name": "Active"}}},
             },
         },
     ],
@@ -201,19 +294,19 @@ json_payload = {
         {
             "name": "Device 1",
             "defaults": {
-                "role": "#ref:extras.role:name:Role 1",
-                "device_type": "#ref:dcim.devicetype:model:Model 1",
-                "location": "#ref:dcim.location:name:Location 1",
-                "status": "#ref:extras.status:name:Active",
+                "role": {"#ref": {"extras.role": {"name": "Role 1"}}},
+                "device_type": {"#ref": {"dcim.devicetype": {"model": "Model 1"}}},
+                "location": {"#ref": {"dcim.location": {"name": "Location 1"}}},
+                "status": {"#ref": {"extras.status": {"name": "Active"}}},
             },
         },
         {
             "name": "Device 2",
             "defaults": {
-                "role": "#ref:extras.role:name:Role 2",
-                "device_type": "#ref:dcim.devicetype:model:Model 2",
-                "location": "#ref:dcim.location:name:Location 2",
-                "status": "#ref:extras.status:name:Active",
+                "role": {"#ref": {"extras.role": {"name": "Role 2"}}},
+                "device_type": {"#ref": {"dcim.devicetype": {"model": "Model 2"}}},
+                "location": {"#ref": {"dcim.location": {"name": "Location 2"}}},
+                "status": {"#ref": {"extras.status": {"name": "Active"}}},
             },
         },
     ],

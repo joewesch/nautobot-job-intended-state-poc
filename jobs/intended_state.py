@@ -19,30 +19,22 @@ def replace_ref(ref):
     """Recursively replace references."""
     if isinstance(ref, dict):
         for key, value in ref.items():
+            if key == "#ref":
+                return lookup_ref(value)
             ref[key] = replace_ref(value)
         return ref
 
     if isinstance(ref, (list, set, tuple)):
         return [replace_ref(r) for r in ref]
 
-    if not isinstance(ref, (str, bytes)):
-        return ref
+    return ref
 
-    if not ref.startswith("#ref"):
-        return ref
 
-    ref_split = ref.split(":")
-    # pop off #ref
-    ref_split.pop(0)
-    # Grab the app.model
-    app_name = ref_split.pop(0)
-    object_class = apps.get_model(app_name)
-    # Get every other item in the list for fields
-    fields = [f for f in ref_split[::2]]
-    # and for values start at index 1
-    values = [v for v in ref_split[1::2]]
-    obj_lookup = {fields[i]: values[i] for i in range(len(fields))}
-    return object_class.objects.get(**obj_lookup)
+def lookup_ref(ref):
+    """Lookup the reference and return the object."""
+    for app_name, data in ref.items():
+        object_class = apps.get_model(app_name)
+        return object_class.objects.get(**data)
 
 
 def obj_set(obj, set_dict):
@@ -67,7 +59,7 @@ class IntendedState(Job):
     json_payload = TextVar()
     atomic = BooleanVar(
         label="Run job as an atomic transaction (revert all changes on errors)",
-        default=True,
+        default=False,
         required=False,
     )
 
